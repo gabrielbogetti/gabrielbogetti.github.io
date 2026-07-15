@@ -1,0 +1,230 @@
+/* ============================================================
+   SISTEMA DE DISEÑO
+   Identidad: señalética de regata. Alto contraste pensado para
+   usarse afuera, al sol, desde el celular. Nada decorativo que
+   compita con la información operativa.
+   ============================================================ */
+
+:root {
+  /* Color */
+  --navy-950: #0a1e33;
+  --navy-800: #0f2c4c;
+  --navy-700: #163a63;
+  --fog: #f2f5f8;
+  --white: #ffffff;
+  --ink: #0a1e33;
+  --mist: #6b7a8d;
+  --line: #dde3ea;
+  --accent: #e8590c;
+  --accent-dark: #c94a08;
+  --in: #1e8e5a;
+  --in-bg: #e7f6ee;
+  --out: #b3401f;
+  --out-bg: #fbeae3;
+  --warn-bg: #fff4e0;
+
+  /* Tipografía */
+  --font-display: 'Archivo Expanded', 'Arial Narrow', sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--fog);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-height: 100vh;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  margin: 0;
+}
+
+a { color: inherit; }
+
+button {
+  font-family: var(--font-body);
+  cursor: pointer;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+::selection { background: var(--accent); color: var(--white); }
+
+.mono { font-family: var(--font-mono); letter-spacing: 0.02em; }
+
+/* ---------- Barra superior (páginas internas) ---------- */
+
+.topbar {
+  background: var(--navy-950);
+  color: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar__brand .pennant { width: 20px; height: 20px; }
+
+.topbar__title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.topbar__user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: #b9c6d6;
+}
+
+.topbar__user button {
+  background: none;
+  border: 1px solid #2c4363;
+  color: var(--white);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.topbar__user button:hover { background: var(--navy-700); }
+
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px 20px 60px;
+}
+
+/* ---------- Botones ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  border-radius: 8px;
+  padding: 13px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  transition: transform 0.08s ease, background 0.15s ease;
+}
+
+.btn:active { transform: scale(0.98); }
+
+.btn--primary { background: var(--accent); color: var(--white); }
+.btn--primary:hover { background: var(--accent-dark); }
+.btn--primary:disabled { background: #d7b39d; cursor: not-allowed; }
+
+.btn--ghost { background: transparent; color: var(--navy-800); border: 1.5px solid var(--line); }
+.btn--ghost:hover { border-color: var(--navy-800); }
+
+.btn--block { width: 100%; }
+
+/* ---------- Tarjetas / paneles ---------- */
+
+.card {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--mist);
+}
+
+/* ---------- Estados ---------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.badge--in { background: var(--in-bg); color: var(--in); }
+.badge--out { background: var(--out-bg); color: var(--out); }
+.badge--warn { background: var(--warn-bg); color: #9a5b00; }
+
+/* ---------- Formularios ---------- */
+
+.field { margin-bottom: 16px; text-align: left; }
+
+.field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--navy-800);
+}
+
+.field input,
+.field select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: var(--font-body);
+  background: var(--white);
+  color: var(--ink);
+}
+
+.field input:focus,
+.field select:focus {
+  border-color: var(--navy-700);
+  outline: none;
+}
+
+.error-box {
+  background: var(--out-bg);
+  color: var(--out);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  margin-bottom: 16px;
+  display: none;
+}
+
+.error-box.visible { display: block; }

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acreditación y Control de Acceso</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+<style>
+  body {
+    min-height: 100vh;
+    background:
+      linear-gradient(180deg, var(--navy-950) 0%, var(--navy-950) 55%, var(--fog) 55%),
+      repeating-linear-gradient(-45deg, rgba(255,255,255,0.035) 0 2px, transparent 2px 26px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .login-wrap {
+    width: 100%;
+    max-width: 380px;
+  }
+
+  .login-header {
+    text-align: center;
+    color: var(--white);
+    margin-bottom: 22px;
+  }
+
+  .pennant-mark {
+    width: 46px;
+    height: 46px;
+    margin: 0 auto 14px;
+  }
+
+  .login-header .eyebrow { color: #93a6bd; margin-bottom: 6px; }
+
+  .login-header h1 {
+    color: var(--white);
+    font-size: 22px;
+    line-height: 1.25;
+  }
+
+  .login-card {
+    background: var(--white);
+    border-radius: 14px;
+    padding: 28px 24px;
+    box-shadow: 0 24px 60px -20px rgba(10, 30, 51, 0.5);
+  }
+
+  .login-footer {
+    text-align: center;
+    margin-top: 18px;
+    font-size: 12px;
+    color: #93a6bd;
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+  }
+</style>
+</head>
+<body>
+
+<div class="login-wrap">
+  <div class="login-header">
+    <svg class="pennant-mark" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Banderín de regata">
+      <line x1="10" y1="4" x2="10" y2="44" stroke="#E8590C" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M10 6 L40 15 L10 24 Z" fill="#E8590C"/>
+    </svg>
+    <div class="eyebrow" id="eventoSubtitulo">Acreditación y control de acceso</div>
+    <h1 id="eventoNombre">Sudamericano Juvenil de Vela</h1>
+  </div>
+
+  <div class="login-card">
+    <div class="error-box" id="errorBox"></div>
+
+    <form id="loginForm">
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" autocomplete="username" required>
+      </div>
+      <div class="field" style="margin-bottom: 22px;">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn btn--primary btn--block" id="submitBtn">Ingresar</button>
+    </form>
+  </div>
+
+  <div class="login-footer">SBA25 · SISTEMA DE ACREDITACIÓN</div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/session.js"></script>
+<script src="js/api.js"></script>
+<script>
+  document.getElementById('eventoNombre').textContent = CONFIG.EVENTO_NOMBRE;
+  document.getElementById('eventoSubtitulo').textContent = CONFIG.EVENTO_SUBTITULO;
+
+  // Si ya hay sesión activa, saltar directo a la página que corresponda
+  const sesionActual = Session.get();
+  if (sesionActual && !Session.isExpired()) {
+    Session.redirectByRole(sesionActual.rol);
+  }
+
+  const form = document.getElementById('loginForm');
+  const errorBox = document.getElementById('errorBox');
+  const submitBtn = document.getElementById('submitBtn');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorBox.classList.remove('visible');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Ingresando...';
+
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    const resp = await API.call('login', { email, password });
+
+    if (resp.ok) {
+      Session.save({
+        token: resp.token,
+        rol: resp.rol,
+        nombre: resp.nombre,
+        email: resp.email
+      });
+      Session.redirectByRole(resp.rol);
+    } else {
+      errorBox.textContent = resp.error || 'No se pudo iniciar sesión.';
+      errorBox.classList.add('visible');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Ingresar';
+    }
+  });
+</script>
+
+</body>
+</html>
