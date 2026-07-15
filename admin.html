@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin · Acreditación</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  .tabs { display: flex; gap: 6px; margin-bottom: 20px; border-bottom: 1.5px solid var(--line); }
+  .tab-btn {
+    background: none; border: none; padding: 12px 18px; font-size: 14px; font-weight: 600;
+    color: var(--mist); border-bottom: 2.5px solid transparent; margin-bottom: -1.5px;
+  }
+  .tab-btn.active { color: var(--navy-950); border-bottom-color: var(--accent); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .dropzone {
+    border: 2px dashed var(--line); border-radius: 10px; padding: 32px 20px; text-align: center;
+    color: var(--mist); font-size: 14px; margin-bottom: 18px; background: var(--fog);
+  }
+  .dropzone input { margin-top: 10px; }
+
+  table.preview { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.preview th, table.preview td {
+    text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap;
+  }
+  table.preview th { color: var(--mist); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: .04em; }
+  .table-scroll { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 18px; }
+
+  .stats-row { display: flex; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
+  .stat-pill { background: var(--fog); border-radius: 8px; padding: 10px 16px; font-size: 13px; }
+  .stat-pill b { font-family: var(--font-mono); font-size: 16px; display: block; color: var(--navy-950); }
+
+  .grid-2 { display: grid; grid-template-columns: 1.1fr 1fr; gap: 20px; }
+  @media (max-width: 860px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .search-input { width: 100%; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 8px; font-size: 15px; margin-bottom: 12px; }
+
+  .result-list { max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+  .result-item {
+    padding: 10px 14px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 14px;
+  }
+  .result-item:hover { background: var(--fog); }
+  .result-item.selected { background: #fdece0; }
+  .result-item .id { font-family: var(--font-mono); font-size: 12px; color: var(--mist); }
+
+  .selected-card { border: 1.5px solid var(--navy-950); }
+  .kv { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed var(--line); font-size: 14px; }
+  .kv:last-child { border-bottom: none; }
+  .kv span:first-child { color: var(--mist); }
+</style>
+</head>
+<body>
+
+<div class="topbar" id="topbar"></div>
+
+<div class="page">
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="importar">Importar participantes</button>
+    <button class="tab-btn" data-tab="asignar">Asignar QR</button>
+  </div>
+
+  <!-- ================= TAB: IMPORTAR ================= -->
+  <div class="tab-panel active" id="tab-importar">
+    <div class="card">
+      <div class="eyebrow" style="margin-bottom:10px;">Paso 1</div>
+      <h2 style="font-size:18px;margin-bottom:6px;">Cargar planilla de participantes</h2>
+      <p style="color:var(--mist);font-size:14px;margin-bottom:18px;">
+        Subí el Excel tal cual lo exportás (hoja "Export", columnas CAMPO 1 a CAMPO 6).
+        Las filas sin CAMPO 6 (id interno) se descartan automáticamente.
+      </p>
+
+      <div class="dropzone">
+        📄 Seleccioná el archivo .xls / .xlsx
+        <div><input type="file" id="fileInput" accept=".xls,.xlsx,.csv"></div>
+      </div>
+
+      <div id="statsRow" class="stats-row" style="display:none;"></div>
+
+      <div id="previewWrap" class="table-scroll" style="display:none;">
+        <table class="preview" id="previewTable"></table>
+      </div>
+
+      <button class="btn btn--primary" id="btnConfirmarImport" style="display:none;">Confirmar importación</button>
+    </div>
+  </div>
+
+  <!-- ================= TAB: ASIGNAR QR ================= -->
+  <div class="tab-panel" id="tab-asignar">
+    <div class="grid-2">
+      <div class="card">
+        <div class="eyebrow" style="margin-bottom:10px;">Buscar competidor</div>
+        <input type="text" class="search-input" id="buscarInput" placeholder="Nombre, país, clase o ID...">
+        <div class="result-list" id="resultList"></div>
+      </div>
+
+      <div class="card selected-card" id="asignarCard" style="display:none;">
+        <div class="eyebrow" style="margin-bottom:10px;">Competidor seleccionado</div>
+        <div id="competidorInfo" style="margin-bottom:18px;"></div>
+
+        <div class="field">
+          <label for="serialInput">Código QR (escaneá con lector USB o tipealo)</label>
+          <input type="text" id="serialInput" class="mono" placeholder="SBA25-00001-5" autocomplete="off">
+        </div>
+        <button class="btn btn--primary btn--block" id="btnAsignar">Asignar QR</button>
+      </div>
+
+      <div class="card" id="sinSeleccion">
+        <p style="color:var(--mist);font-size:14px;">Elegí un competidor de la lista de la izquierda para asignarle un código QR.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/session.js"></script>
+<script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script>
+  const sesion = Session.requireRole(['admin']);
+  if (sesion) UI.renderTopbar('Admin');
+
+  // ---------- Tabs ----------
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+      if (btn.dataset.tab === 'asignar' && participantesCache === null) cargarParticipantes();
+    });
+  });
+
+  // ---------- IMPORTAR ----------
+  let filasParaImportar = [];
+
+  document.getElementById('fileInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const wb = XLSX.read(evt.target.result, { type: 'binary' });
+        const hoja = wb.Sheets['Export'] || wb.Sheets[wb.SheetNames[0]];
+        const filas = XLSX.utils.sheet_to_json(hoja, { header: 1 });
+        procesarFilas(filas);
+      } catch (err) {
+        UI.toast('No se pudo leer el archivo: ' + err.message, 'error');
+      }
+    };
+    reader.readAsBinaryString(file);
+  });
+
+  function procesarFilas(filas) {
+    // filas[0] = headers (CAMPO 1 ... CAMPO 6)
+    filasParaImportar = [];
+    let omitidas = 0;
+
+    for (let i = 1; i < filas.length; i++) {
+      const r = filas[i];
+      if (!r || r.length === 0) continue;
+      const campo6 = r[5];
+      if (campo6 === undefined || campo6 === null || campo6 === '') { omitidas++; continue; }
+
+      const campo1 = String(r[0] || '').trim();
+      let nombre = campo1, pais = '', numeroVela = '';
+      const partes = campo1.split(' - ');
+      if (partes.length === 2) {
+        nombre = partes[0].trim();
+        const resto = partes[1].trim().split(/\s+/);
+        numeroVela = resto.pop() || '';
+        pais = resto.join(' ');
+      }
+
+      filasParaImportar.push({
+        id: campo6,
+        nombreCompleto: nombre,
+        pais: pais,
+        numeroVela: numeroVela,
+        cancha: r[2] || '',
+        clase: r[3] || '',
+        club: r[4] || ''
+      });
+    }
+
+    document.getElementById('statsRow').style.display = 'flex';
+    document.getElementById('statsRow').innerHTML = `
+      <div class="stat-pill"><b>${filasParaImportar.length}</b>participantes leídos</div>
+      <div class="stat-pill"><b>${omitidas}</b>filas vacías omitidas</div>
+    `;
+
+    const table = document.getElementById('previewTable');
+    table.innerHTML = `
+      <thead><tr><th>ID</th><th>Nombre</th><th>País</th><th>Vela</th><th>Cancha</th><th>Clase</th><th>Club</th></tr></thead>
+      <tbody>
+        ${filasParaImportar.slice(0, 50).map(p => `
+          <tr>
+            <td class="mono">${p.id}</td><td>${p.nombreCompleto}</td><td>${p.pais}</td>
+            <td>${p.numeroVela}</td><td>${p.cancha}</td><td>${p.clase}</td><td>${p.club}</td>
+          </tr>`).join('')}
+      </tbody>
+    `;
+    document.getElementById('previewWrap').style.display = 'block';
+    document.getElementById('btnConfirmarImport').style.display = filasParaImportar.length ? 'inline-flex' : 'none';
+  }
+
+  document.getElementById('btnConfirmarImport').addEventListener('click', async () => {
+    const btn = document.getElementById('btnConfirmarImport');
+    btn.disabled = true;
+    btn.textContent = 'Importando...';
+    const resp = await API.call('importarParticipantes', { participantes: filasParaImportar });
+    btn.disabled = false;
+    btn.textContent = 'Confirmar importación';
+    if (resp.ok) {
+      UI.toast(`Listo: ${resp.nuevos} nuevos, ${resp.actualizados} actualizados.`);
+      participantesCache = null; // fuerza recarga en la pestaña Asignar QR
+    } else {
+      UI.toast(resp.error || 'Error al importar', 'error');
+    }
+  });
+
+  // ---------- ASIGNAR QR ----------
+  let participantesCache = null;
+  let seleccionado = null;
+
+  async function cargarParticipantes() {
+    document.getElementById('resultList').innerHTML = '<div class="result-item">Cargando...</div>';
+    const resp = await API.call('listarParticipantes', {});
+    if (!resp.ok) {
+      UI.toast(resp.error || 'Error al cargar participantes', 'error');
+      return;
+    }
+    participantesCache = resp.participantes;
+    renderResultados(participantesCache);
+  }
+
+  function renderResultados(lista) {
+    const cont = document.getElementById('resultList');
+    if (!lista.length) {
+      cont.innerHTML = '<div class="result-item" style="color:var(--mist)">Sin resultados</div>';
+      return;
+    }
+    cont.innerHTML = lista.slice(0, 100).map(p => `
+      <div class="result-item" data-id="${p.id}">
+        <div>${p.nombreCompleto} <span class="id">· ${p.clase || ''}</span></div>
+        <div class="id">ID ${p.id} · ${p.cancha || 'sin cancha'} ${p.acreditado ? '· ✅ acreditado' : ''}</div>
+      </div>
+    `).join('');
+    cont.querySelectorAll('.result-item').forEach(el => {
+      el.addEventListener('click', () => seleccionarCompetidor(el.dataset.id));
+    });
+  }
+
+  document.getElementById('buscarInput').addEventListener('input', (e) => {
+    if (!participantesCache) return;
+    const q = e.target.value.trim().toLowerCase();
+    const filtrados = !q ? participantesCache : participantesCache.filter(p =>
+      String(p.nombreCompleto).toLowerCase().includes(q) ||
+      String(p.id).toLowerCase().includes(q) ||
+      String(p.clase).toLowerCase().includes(q) ||
+      String(p.pais).toLowerCase().includes(q)
+    );
+    renderResultados(filtrados);
+  });
+
+  function seleccionarCompetidor(id) {
+    seleccionado = participantesCache.find(p => String(p.id) === String(id));
+    if (!seleccionado) return;
+
+    document.querySelectorAll('.result-item').forEach(el => el.classList.toggle('selected', el.dataset.id === String(id)));
+
+    document.getElementById('sinSeleccion').style.display = 'none';
+    document.getElementById('asignarCard').style.display = 'block';
+    document.getElementById('competidorInfo').innerHTML = `
+      <div class="kv"><span>Nombre</span><span>${seleccionado.nombreCompleto}</span></div>
+      <div class="kv"><span>País / Vela</span><span>${seleccionado.pais} ${seleccionado.numeroVela}</span></div>
+      <div class="kv"><span>Clase</span><span>${seleccionado.clase}</span></div>
+      <div class="kv"><span>Cancha</span><span>${seleccionado.cancha}</span></div>
+      <div class="kv"><span>Club</span><span>${seleccionado.club}</span></div>
+      <div class="kv"><span>Estado</span><span>${seleccionado.acreditado ? `<span class="badge badge--in">QR: ${seleccionado.qr_serial}</span>` : '<span class="badge badge--warn">Sin acreditar</span>'}</span></div>
+    `;
+    const serialInput = document.getElementById('serialInput');
+    serialInput.value = '';
+    serialInput.focus();
+  }
+
+  document.getElementById('serialInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('btnAsignar').click();
+  });
+
+  document.getElementById('btnAsignar').addEventListener('click', async () => {
+    if (!seleccionado) return;
+    const serial = document.getElementById('serialInput').value.trim();
+    if (!serial) { UI.toast('Escaneá o escribí un código QR', 'error'); return; }
+
+    const btn = document.getElementById('btnAsignar');
+    btn.disabled = true;
+    btn.textContent = 'Asignando...';
+    const resp = await API.call('asignarQR', { competidorId: seleccionado.id, serial });
+    btn.disabled = false;
+    btn.textContent = 'Asignar QR';
+
+    if (resp.ok) {
+      UI.toast(`QR asignado a ${seleccionado.nombreCompleto}`);
+      seleccionado.acreditado = true;
+      seleccionado.qr_serial = serial;
+      seleccionarCompetidor(seleccionado.id);
+      renderResultados(participantesCache);
+    } else {
+      UI.toast(resp.error || 'No se pudo asignar el QR', 'error');
+    }
+  });
+</script>
+
+</body>
+</html>
