@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Control de Acceso</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<style>
+  body { background: var(--fog); }
+  .page { max-width: 480px; padding: 18px 16px 40px; }
+
+  #qr-reader {
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1.5px solid var(--line);
+    background: #000;
+    position: relative;
+  }
+  #qr-reader video { border-radius: 14px; }
+
+  .camera-msg {
+    text-align: center; padding: 30px 16px; color: var(--mist); font-size: 14px;
+  }
+
+  .manual-toggle {
+    text-align: center; margin: 14px 0; font-size: 13px; color: var(--mist);
+    text-decoration: underline; cursor: pointer;
+  }
+
+  .manual-box { display: none; gap: 10px; margin-bottom: 18px; }
+  .manual-box.visible { display: flex; }
+  .manual-box input {
+    flex: 1; padding: 14px; border: 1.5px solid var(--line); border-radius: 8px;
+    font-size: 16px; font-family: var(--font-mono);
+  }
+
+  .status-strip {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 4px; margin-bottom: 14px; font-size: 13px; color: var(--mist);
+  }
+
+  /* Tarjeta de resultado */
+  .result-card {
+    background: var(--white); border-radius: 16px; padding: 24px 20px;
+    text-align: center; box-shadow: 0 16px 40px -18px rgba(10,30,51,0.35);
+  }
+  .result-card .nombre { font-family: var(--font-display); font-size: 22px; margin: 6px 0 2px; }
+  .result-card .detalle { color: var(--mist); font-size: 14px; margin-bottom: 4px; }
+  .result-card .cancha-pill {
+    display: inline-block; background: var(--fog); border-radius: 20px; padding: 5px 14px;
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--navy-800); margin: 10px 0 18px;
+  }
+
+  .estado-actual { font-size: 13px; color: var(--mist); margin-bottom: 18px; }
+
+  .btn-confirmar {
+    width: 100%; padding: 18px; border-radius: 12px; border: none;
+    font-size: 18px; font-weight: 700; color: var(--white); font-family: var(--font-display);
+  }
+  .btn-confirmar.ingreso { background: var(--in); }
+  .btn-confirmar.egreso { background: var(--out); }
+
+  .btn-cancelar {
+    width: 100%; padding: 12px; margin-top: 10px; background: none; border: none;
+    color: var(--mist); font-size: 14px; text-decoration: underline;
+  }
+
+  .error-card {
+    background: var(--out-bg); color: var(--out); border-radius: 16px; padding: 24px 20px;
+    text-align: center;
+  }
+  .error-card .titulo { font-family: var(--font-display); font-size: 18px; margin-bottom: 6px; }
+
+  .success-flash {
+    background: var(--in-bg); color: var(--in); border-radius: 16px; padding: 30px 20px;
+    text-align: center;
+  }
+  .success-flash .check { font-size: 40px; margin-bottom: 8px; }
+  .success-flash .titulo { font-family: var(--font-display); font-size: 19px; margin-bottom: 4px; }
+
+  .log-mini { margin-top: 22px; }
+  .log-mini h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--mist); margin-bottom: 8px; }
+  .log-item {
+    display: flex; justify-content: space-between; padding: 8px 0; font-size: 13px;
+    border-bottom: 1px solid var(--line);
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar" id="topbar"></div>
+
+<div class="page">
+  <div class="status-strip">
+    <span id="statusTexto">Apuntá la cámara al código QR</span>
+    <span class="mono" id="relojTexto"></span>
+  </div>
+
+  <div id="scanZone">
+    <div id="qr-reader"></div>
+  </div>
+
+  <div class="manual-toggle" id="manualToggle">¿No funciona la cámara? Ingresar código a mano</div>
+  <div class="manual-box" id="manualBox">
+    <input type="text" id="manualInput" class="mono" placeholder="SBA25-00001-5" autocomplete="off">
+    <button class="btn btn--primary" id="btnManualBuscar">Buscar</button>
+  </div>
+
+  <div id="resultZone"></div>
+
+  <div class="log-mini">
+    <h3>Últimos registros</h3>
+    <div id="logMini"><div style="color:var(--mist);font-size:13px;">Todavía no hay registros en esta sesión.</div></div>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/session.js"></script>
+<script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script>
+  const sesion = Session.requireRole(['admin', 'control_acceso']);
+  if (sesion) UI.renderTopbar('Control de acceso');
+
+  function tick() {
+    document.getElementById('relojTexto').textContent = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+  tick();
+  setInterval(tick, 1000);
+
+  let html5QrCode = null;
+  let escaneando = false;
+  let logSesion = [];
+
+  async function iniciarCamara() {
+    html5QrCode = new Html5Qrcode("qr-reader");
+    try {
+      await html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 240, height: 240 } },
+        onScanSuccess,
+        () => {}
+      );
+      escaneando = true;
+    } catch (err) {
+      document.getElementById('qr-reader').innerHTML =
+        '<div class="camera-msg">No se pudo acceder a la cámara.<br>Usá la opción de ingresar el código a mano.</div>';
+      mostrarManual(true);
+    }
+  }
+
+  function onScanSuccess(decodedText) {
+    if (!escaneando) return;
+    escaneando = false;
+    html5QrCode.pause();
+    procesarCodigo(decodedText.trim());
+  }
+
+  function mostrarManual(forzado) {
+    const box = document.getElementById('manualBox');
+    box.classList.toggle('visible', forzado || !box.classList.contains('visible'));
+    if (box.classList.contains('visible')) document.getElementById('manualInput').focus();
+  }
+
+  document.getElementById('manualToggle').addEventListener('click', () => mostrarManual(false));
+  document.getElementById('btnManualBuscar').addEventListener('click', () => {
+    const val = document.getElementById('manualInput').value.trim();
+    if (val) procesarCodigo(val);
+  });
+  document.getElementById('manualInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('btnManualBuscar').click();
+  });
+
+  async function procesarCodigo(serial) {
+    document.getElementById('statusTexto').textContent = 'Buscando...';
+    const resp = await API.call('buscarPorSerial', { serial });
+
+    if (!resp.ok) {
+      renderError(resp.error || 'Código no reconocido');
+      return;
+    }
+    renderResultado(resp.participante, serial);
+  }
+
+  function renderResultado(p, serial) {
+    document.getElementById('statusTexto').textContent = 'Confirmá el movimiento';
+    const dentro = p.estadoActual === 'INGRESO';
+    const proximoTipo = dentro ? 'EGRESO' : 'INGRESO';
+    const claseBtn = dentro ? 'egreso' : 'ingreso';
+    const textoBtn = dentro ? 'Confirmar EGRESO' : 'Confirmar INGRESO';
+
+    document.getElementById('resultZone').innerHTML = `
+      <div class="result-card">
+        <div class="detalle">ID ${p.id} · ${p.clase || ''}</div>
+        <div class="nombre">${p.nombreCompleto}</div>
+        <div class="detalle">${p.club || ''}</div>
+        <div class="cancha-pill">${p.cancha || 'Sin cancha'}</div>
+        <div class="estado-actual">Estado actual: <b>${dentro ? 'DENTRO' : 'AFUERA'}</b></div>
+        <button class="btn-confirmar ${claseBtn}" id="btnConfirmar">${textoBtn}</button>
+        <button class="btn-cancelar" id="btnCancelar">Cancelar / escanear otro</button>
+      </div>
+    `;
+
+    document.getElementById('btnConfirmar').addEventListener('click', async () => {
+      const btn = document.getElementById('btnConfirmar');
+      btn.disabled = true;
+      btn.textContent = 'Registrando...';
+      const resp = await API.call('registrarAcceso', { serial, tipo: proximoTipo });
+      if (resp.ok) {
+        renderExito(resp.participante, resp.tipoRegistrado);
+        agregarLog(resp.participante, resp.tipoRegistrado);
+      } else {
+        UI.toast(resp.error || 'No se pudo registrar', 'error');
+        reanudarEscaneo();
+      }
+    });
+
+    document.getElementById('btnCancelar').addEventListener('click', reanudarEscaneo);
+  }
+
+  function renderExito(p, tipo) {
+    document.getElementById('resultZone').innerHTML = `
+      <div class="success-flash">
+        <div class="check">✓</div>
+        <div class="titulo">${tipo} registrado</div>
+        <div class="detalle">${p.nombreCompleto} · ${p.cancha || ''}</div>
+      </div>
+    `;
+    setTimeout(reanudarEscaneo, 1400);
+  }
+
+  function renderError(mensaje) {
+    document.getElementById('statusTexto').textContent = 'Apuntá la cámara al código QR';
+    document.getElementById('resultZone').innerHTML = `
+      <div class="error-card">
+        <div class="titulo">⚠ ${mensaje}</div>
+        <button class="btn-cancelar" id="btnReintentar">Escanear de nuevo</button>
+      </div>
+    `;
+    document.getElementById('btnReintentar').addEventListener('click', reanudarEscaneo);
+  }
+
+  function reanudarEscaneo() {
+    document.getElementById('resultZone').innerHTML = '';
+    document.getElementById('manualInput').value = '';
+    document.getElementById('statusTexto').textContent = 'Apuntá la cámara al código QR';
+    escaneando = true;
+    if (html5QrCode) {
+      try { html5QrCode.resume(); } catch (e) {}
+    }
+  }
+
+  function agregarLog(p, tipo) {
+    logSesion.unshift({ nombre: p.nombreCompleto, cancha: p.cancha, tipo, hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) });
+    logSesion = logSesion.slice(0, 8);
+    document.getElementById('logMini').innerHTML = logSesion.map(l => `
+      <div class="log-item">
+        <span>${l.nombre}</span>
+        <span><span class="badge ${l.tipo === 'INGRESO' ? 'badge--in' : 'badge--out'}">${l.tipo}</span> ${l.hora}</span>
+      </div>
+    `).join('');
+  }
+
+  iniciarCamara();
+</script>
+
+</body>
+</html>
