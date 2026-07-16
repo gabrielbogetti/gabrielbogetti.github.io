@@ -62,6 +62,7 @@
   <div class="tabs">
     <button class="tab-btn active" data-tab="importar">Importar participantes</button>
     <button class="tab-btn" data-tab="asignar">Asignar QR</button>
+    <button class="tab-btn" data-tab="usuarios">Usuarios</button>
   </div>
 
   <!-- ================= TAB: IMPORTAR ================= -->
@@ -107,10 +108,47 @@
           <input type="text" id="serialInput" class="mono" placeholder="SBA25-00001-5" autocomplete="off">
         </div>
         <button class="btn btn--primary btn--block" id="btnAsignar">Asignar QR</button>
+        <button class="btn btn--ghost btn--block" id="btnDesasignar" style="display:none;margin-top:10px;">Desasignar QR (perdido / roto)</button>
       </div>
 
       <div class="card" id="sinSeleccion">
         <p style="color:var(--mist);font-size:14px;">Elegí un competidor de la lista de la izquierda para asignarle un código QR.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= TAB: USUARIOS ================= -->
+  <div class="tab-panel" id="tab-usuarios">
+    <div class="grid-2">
+      <div class="card">
+        <div class="eyebrow" style="margin-bottom:10px;">Usuarios del sistema</div>
+        <div id="usuariosList"></div>
+      </div>
+
+      <div class="card">
+        <div class="eyebrow" style="margin-bottom:10px;" id="formUsuarioTitulo">Crear usuario</div>
+        <div class="field">
+          <label for="uEmail">Email</label>
+          <input type="email" id="uEmail" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="uNombre">Nombre</label>
+          <input type="text" id="uNombre" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="uRol">Rol</label>
+          <select id="uRol">
+            <option value="admin">Admin</option>
+            <option value="consulta">Consulta</option>
+            <option value="control_acceso">Control de acceso</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="uPassword">Contraseña <span id="uPasswordHint" style="font-weight:400;color:var(--mist);"></span></label>
+          <input type="password" id="uPassword" autocomplete="off">
+        </div>
+        <button class="btn btn--primary btn--block" id="btnGuardarUsuario">Crear usuario</button>
+        <button class="btn btn--ghost btn--block" id="btnCancelarEdicion" style="display:none;margin-top:10px;">Cancelar edición</button>
       </div>
     </div>
   </div>
