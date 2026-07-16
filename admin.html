@@ -170,6 +170,7 @@
       btn.classList.add('active');
       document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
       if (btn.dataset.tab === 'asignar' && participantesCache === null) cargarParticipantes();
+      if (btn.dataset.tab === 'usuarios' && usuariosCache === null) cargarUsuarios();
     });
   });
 
@@ -324,6 +325,8 @@
     const serialInput = document.getElementById('serialInput');
     serialInput.value = '';
     serialInput.focus();
+
+    document.getElementById('btnDesasignar').style.display = seleccionado.acreditado ? 'block' : 'none';
   }
 
   document.getElementById('serialInput').addEventListener('keydown', (e) => {
@@ -352,6 +355,149 @@
       UI.toast(resp.error || 'No se pudo asignar el QR', 'error');
     }
   });
+
+  document.getElementById('btnDesasignar').addEventListener('click', async () => {
+    if (!seleccionado || !seleccionado.qr_serial) return;
+    if (!confirm(`¿Desasignar el QR de ${seleccionado.nombreCompleto}? Va a quedar "sin acreditar" hasta que le asignes uno nuevo.`)) return;
+
+    const btn = document.getElementById('btnDesasignar');
+    btn.disabled = true;
+    btn.textContent = 'Desasignando...';
+    const resp = await API.call('desasignarQR', { serial: seleccionado.qr_serial });
+    btn.disabled = false;
+    btn.textContent = 'Desasignar QR (perdido / roto)';
+
+    if (resp.ok) {
+      UI.toast(`QR desasignado. ${seleccionado.nombreCompleto} quedó sin acreditar.`);
+      seleccionado.acreditado = false;
+      seleccionado.qr_serial = '';
+      seleccionarCompetidor(seleccionado.id);
+      renderResultados(participantesCache);
+    } else {
+      UI.toast(resp.error || 'No se pudo desasignar el QR', 'error');
+    }
+  });
+
+  // ---------- USUARIOS ----------
+  let usuariosCache = null;
+  let editandoEmail = null; // null = modo "crear"; si tiene valor = modo "editar"
+
+  async function cargarUsuarios() {
+    document.getElementById('usuariosList').innerHTML = '<p style="color:var(--mist);font-size:14px;">Cargando...</p>';
+    const resp = await API.call('listarUsuarios', {});
+    if (!resp.ok) {
+      UI.toast(resp.error || 'Error al cargar usuarios', 'error');
+      return;
+    }
+    usuariosCache = resp.usuarios;
+    renderUsuarios();
+  }
+
+  function renderUsuarios() {
+    const cont = document.getElementById('usuariosList');
+    if (!usuariosCache.length) {
+      cont.innerHTML = '<p style="color:var(--mist);font-size:14px;">No hay usuarios todavía.</p>';
+      return;
+    }
+    cont.innerHTML = usuariosCache.map(u => `
+      <div style="border-bottom:1px solid var(--line);padding:12px 0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-weight:600;font-size:14px;">${u.nombre} ${u.activo ? '' : '<span class="badge badge--warn">Inactivo</span>'}</div>
+            <div style="font-size:12px;color:var(--mist);">${u.email} · ${UI.nombreRol(u.rol)}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+          <button class="btn btn--ghost" style="padding:6px 12px;font-size:12px;" data-accion="editar" data-email="${u.email}">Editar</button>
+          <button class="btn btn--ghost" style="padding:6px 12px;font-size:12px;" data-accion="clave" data-email="${u.email}">Cambiar clave</button>
+          <button class="btn btn--ghost" style="padding:6px 12px;font-size:12px;" data-accion="toggle" data-email="${u.email}" data-activo="${u.activo}">${u.activo ? 'Desactivar' : 'Activar'}</button>
+          <button class="btn btn--ghost" style="padding:6px 12px;font-size:12px;color:var(--out);border-color:var(--out-bg);" data-accion="eliminar" data-email="${u.email}">Eliminar</button>
+        </div>
+      </div>
+    `).join('');
+
+    cont.querySelectorAll('[data-accion="editar"]').forEach(b => b.addEventListener('click', () => iniciarEdicion(b.dataset.email)));
+    cont.querySelectorAll('[data-accion="clave"]').forEach(b => b.addEventListener('click', () => cambiarClave(b.dataset.email)));
+    cont.querySelectorAll('[data-accion="toggle"]').forEach(b => b.addEventListener('click', () => toggleActivo(b.dataset.email, b.dataset.activo === 'true')));
+    cont.querySelectorAll('[data-accion="eliminar"]').forEach(b => b.addEventListener('click', () => eliminarUsuarioUI(b.dataset.email)));
+  }
+
+  function iniciarEdicion(email) {
+    const u = usuariosCache.find(x => x.email === email);
+    if (!u) return;
+    editandoEmail = email;
+    document.getElementById('uEmail').value = u.email;
+    document.getElementById('uEmail').disabled = true;
+    document.getElementById('uNombre').value = u.nombre;
+    document.getElementById('uRol').value = u.rol;
+    document.getElementById('uPassword').value = '';
+    document.getElementById('uPasswordHint').textContent = '(dejar vacío para no cambiarla)';
+    document.getElementById('formUsuarioTitulo').textContent = 'Editar usuario';
+    document.getElementById('btnGuardarUsuario').textContent = 'Guardar cambios';
+    document.getElementById('btnCancelarEdicion').style.display = 'block';
+    document.getElementById('uEmail').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function resetForm() {
+    editandoEmail = null;
+    document.getElementById('uEmail').value = '';
+    document.getElementById('uEmail').disabled = false;
+    document.getElementById('uNombre').value = '';
+    document.getElementById('uRol').value = 'admin';
+    document.getElementById('uPassword').value = '';
+    document.getElementById('uPasswordHint').textContent = '';
+    document.getElementById('formUsuarioTitulo').textContent = 'Crear usuario';
+    document.getElementById('btnGuardarUsuario').textContent = 'Crear usuario';
+    document.getElementById('btnCancelarEdicion').style.display = 'none';
+  }
+
+  document.getElementById('btnCancelarEdicion').addEventListener('click', resetForm);
+
+  document.getElementById('btnGuardarUsuario').addEventListener('click', async () => {
+    const email = document.getElementById('uEmail').value.trim();
+    const nombre = document.getElementById('uNombre').value.trim();
+    const rol = document.getElementById('uRol').value;
+    const password = document.getElementById('uPassword').value;
+
+    if (!email || !nombre) { UI.toast('Completá email y nombre', 'error'); return; }
+    if (!editandoEmail && !password) { UI.toast('La contraseña es obligatoria para un usuario nuevo', 'error'); return; }
+    if (password && password.length < 6) { UI.toast('La contraseña debe tener al menos 6 caracteres', 'error'); return; }
+
+    const btn = document.getElementById('btnGuardarUsuario');
+    btn.disabled = true;
+    const resp = await API.call('crearOActualizarUsuario', { email, nombre, rol, password });
+    btn.disabled = false;
+
+    if (resp.ok) {
+      UI.toast(editandoEmail ? 'Usuario actualizado' : 'Usuario creado');
+      resetForm();
+      cargarUsuarios();
+    } else {
+      UI.toast(resp.error || 'No se pudo guardar el usuario', 'error');
+    }
+  });
+
+  async function cambiarClave(email) {
+    const nueva = prompt(`Nueva contraseña para ${email} (mínimo 6 caracteres):`);
+    if (!nueva) return;
+    if (nueva.length < 6) { UI.toast('La contraseña debe tener al menos 6 caracteres', 'error'); return; }
+    const resp = await API.call('cambiarPasswordUsuario', { email, nuevaPassword: nueva });
+    if (resp.ok) UI.toast('Contraseña actualizada');
+    else UI.toast(resp.error || 'No se pudo cambiar la contraseña', 'error');
+  }
+
+  async function toggleActivo(email, activoActual) {
+    const resp = await API.call('activarDesactivarUsuario', { email, activo: !activoActual });
+    if (resp.ok) { UI.toast(!activoActual ? 'Usuario activado' : 'Usuario desactivado'); cargarUsuarios(); }
+    else UI.toast(resp.error || 'No se pudo actualizar', 'error');
+  }
+
+  async function eliminarUsuarioUI(email) {
+    if (!confirm(`¿Eliminar definitivamente al usuario ${email}? Esta acción no se puede deshacer.`)) return;
+    const resp = await API.call('eliminarUsuario', { email });
+    if (resp.ok) { UI.toast('Usuario eliminado'); cargarUsuarios(); }
+    else UI.toast(resp.error || 'No se pudo eliminar', 'error');
+  }
 </script>
 
 </body>
