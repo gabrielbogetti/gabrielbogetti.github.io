@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consulta · Estado por cancha</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+<style>
+  .toolbar {
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 10px; margin-bottom: 20px;
+  }
+  .toolbar .actualizado { font-size: 12px; color: var(--mist); font-family: var(--font-mono); }
+
+  .canchas-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  .cancha-card {
+    background: var(--white); border: 1px solid var(--line); border-radius: 12px; padding: 18px;
+    cursor: pointer; transition: border-color .15s ease, transform .08s ease;
+  }
+  .cancha-card:hover { border-color: var(--navy-800); }
+  .cancha-card.activa { border-color: var(--accent); border-width: 2px; padding: 17px; }
+
+  .cancha-card .nombre { font-family: var(--font-display); font-size: 16px; margin-bottom: 12px; }
+
+  .cancha-stats { display: flex; gap: 10px; }
+  .cancha-stat { flex: 1; text-align: center; border-radius: 8px; padding: 8px 4px; }
+  .cancha-stat .num { font-family: var(--font-mono); font-size: 20px; font-weight: 700; display: block; }
+  .cancha-stat .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+  .cancha-stat.dentro { background: var(--in-bg); color: var(--in); }
+  .cancha-stat.afuera { background: var(--out-bg); color: var(--out); }
+  .cancha-stat.pendiente { background: var(--warn-bg); color: #9a5b00; }
+
+  .total-strip {
+    display: flex; gap: 14px; margin-bottom: 24px; flex-wrap: wrap;
+  }
+  .total-pill {
+    background: var(--navy-950); color: var(--white); border-radius: 10px; padding: 14px 20px; flex: 1; min-width: 140px;
+  }
+  .total-pill .num { font-family: var(--font-mono); font-size: 26px; font-weight: 700; display: block; }
+  .total-pill .lbl { font-size: 11px; color: #93a6bd; text-transform: uppercase; letter-spacing: .05em; }
+
+  .detalle-panel { display: none; }
+  .detalle-panel.visible { display: block; }
+
+  table.detalle { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.detalle th, table.detalle td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  table.detalle th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--mist); }
+  .table-scroll { max-height: 460px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+
+  .filter-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .filter-tab {
+    background: var(--fog); border: none; padding: 7px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; color: var(--mist);
+  }
+  .filter-tab.active { background: var(--navy-950); color: var(--white); }
+
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--mist); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="topbar" id="topbar"></div>
+
+<div class="page">
+  <div class="toolbar">
+    <h2 style="font-size:18px;">Estado por cancha</h2>
+    <div class="actualizado" id="actualizadoTexto">Actualizando...</div>
+  </div>
+
+  <div class="total-strip" id="totalStrip"></div>
+
+  <div class="canchas-grid" id="canchasGrid">
+    <div class="empty-state">Cargando datos...</div>
+  </div>
+
+  <div class="card detalle-panel" id="detallePanel">
+    <div class="eyebrow" id="detalleTitulo" style="margin-bottom:10px;">Detalle</div>
+    <div class="filter-tabs">
+      <button class="filter-tab active" data-filtro="todos">Todos</button>
+      <button class="filter-tab" data-filtro="dentro">Dentro</button>
+      <button class="filter-tab" data-filtro="afuera">Afuera</button>
+      <button class="filter-tab" data-filtro="pendiente">Sin acreditar</button>
+    </div>
+    <div class="table-scroll">
+      <table class="detalle" id="detalleTable"></table>
+    </div>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/session.js"></script>
+<script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script>
+  const sesion = Session.requireRole(['admin', 'consulta']);
+  if (sesion) UI.renderTopbar('Consulta');
+
+  const REFRESCO_MS = 15000;
+  let canchaSeleccionada = null;
+  let participantesCache = [];
+  let filtroActivo = 'todos';
+
+  async function cargarTodo() {
+    const [estadoResp, listaResp] = await Promise.all([
+      API.call('estadoCanchas', {}),
+      API.call('listarParticipantes', {})
+    ]);
+
+    if (!estadoResp.ok || !listaResp.ok) {
+      document.getElementById('canchasGrid').innerHTML =
+        `<div class="empty-state">No se pudo cargar el estado: ${estadoResp.error || listaResp.error || ''}</div>`;
+      return;
+    }
+
+    participantesCache = listaResp.participantes;
+    renderTotales(estadoResp.canchas);
+    renderCanchas(estadoResp.canchas);
+    if (canchaSeleccionada) renderDetalle(canchaSeleccionada);
+
+    document.getElementById('actualizadoTexto').textContent =
+      'Actualizado ' + new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function renderTotales(canchas) {
+    const totales = canchas.reduce((acc, c) => {
+      acc.dentro += c.dentro; acc.afuera += c.afuera; acc.pendiente += c.sinAcreditar; acc.total += c.total;
+      return acc;
+    }, { dentro: 0, afuera: 0, pendiente: 0, total: 0 });
+
+    document.getElementById('totalStrip').innerHTML = `
+      <div class="total-pill"><span class="num">${totales.total}</span><span class="lbl">Total inscriptos</span></div>
+      <div class="total-pill" style="background:var(--in)"><span class="num">${totales.dentro}</span><span class="lbl">Dentro</span></div>
+      <div class="total-pill" style="background:var(--out)"><span class="num">${totales.afuera}</span><span class="lbl">Afuera</span></div>
+      <div class="total-pill" style="background:#9a5b00"><span class="num">${totales.pendiente}</span><span class="lbl">Sin acreditar</span></div>
+    `;
+  }
+
+  function renderCanchas(canchas) {
+    const grid = document.getElementById('canchasGrid');
+    if (!canchas.length) {
+      grid.innerHTML = '<div class="empty-state">Todavía no hay participantes importados.</div>';
+      return;
+    }
+    canchas.sort((a, b) => a.cancha.localeCompare(b.cancha));
+    grid.innerHTML = canchas.map(c => `
+      <div class="cancha-card ${canchaSeleccionada === c.cancha ? 'activa' : ''}" data-cancha="${c.cancha}">
+        <div class="nombre">${c.cancha}</div>
+        <div class="cancha-stats">
+          <div class="cancha-stat dentro"><span class="num">${c.dentro}</span><span class="lbl">Dentro</span></div>
+          <div class="cancha-stat afuera"><span class="num">${c.afuera}</span><span class="lbl">Afuera</span></div>
+          <div class="cancha-stat pendiente"><span class="num">${c.sinAcreditar}</span><span class="lbl">Pend.</span></div>
+        </div>
+      </div>
+    `).join('');
+    grid.querySelectorAll('.cancha-card').forEach(el => {
+      el.addEventListener('click', () => {
+        canchaSeleccionada = el.dataset.cancha;
+        renderCanchas(canchas);
+        renderDetalle(canchaSeleccionada);
+      });
+    });
+  }
+
+  function renderDetalle(cancha) {
+    const panel = document.getElementById('detallePanel');
+    panel.classList.add('visible');
+    document.getElementById('detalleTitulo').textContent = cancha;
+
+    const lista = participantesCache.filter(p => p.cancha === cancha);
+    const filtrada = lista.filter(p => {
+      if (filtroActivo === 'todos') return true;
+      if (filtroActivo === 'pendiente') return !p.acreditado;
+      if (filtroActivo === 'dentro') return p.acreditado && p.estadoActual === 'INGRESO';
+      if (filtroActivo === 'afuera') return p.acreditado && p.estadoActual !== 'INGRESO';
+      return true;
+    });
+
+    const table = document.getElementById('detalleTable');
+    table.innerHTML = `
+      <thead><tr><th>Nombre</th><th>Clase</th><th>Club</th><th>Estado</th></tr></thead>
+      <tbody>
+        ${filtrada.map(p => `
+          <tr>
+            <td>${p.nombreCompleto}</td>
+            <td>${p.clase || ''}</td>
+            <td>${p.club || ''}</td>
+            <td>${badgeEstado(p)}</td>
+          </tr>
+        `).join('') || '<tr><td colspan="4" style="color:var(--mist);text-align:center;">Sin resultados</td></tr>'}
+      </tbody>
+    `;
+  }
+
+  function badgeEstado(p) {
+    if (!p.acreditado) return '<span class="badge badge--warn">Sin acreditar</span>';
+    return p.estadoActual === 'INGRESO'
+      ? '<span class="badge badge--in">Dentro</span>'
+      : '<span class="badge badge--out">Afuera</span>';
+  }
+
+  document.querySelectorAll('.filter-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      filtroActivo = btn.dataset.filtro;
+      if (canchaSeleccionada) renderDetalle(canchaSeleccionada);
+    });
+  });
+
+  cargarTodo();
+  setInterval(cargarTodo, REFRESCO_MS);
+</script>
+
+</body>
+</html>
